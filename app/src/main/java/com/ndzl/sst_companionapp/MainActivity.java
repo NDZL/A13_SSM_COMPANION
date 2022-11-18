@@ -2,6 +2,7 @@ package com.ndzl.sst_companionapp;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -14,9 +15,12 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -175,6 +179,7 @@ public class MainActivity extends AppCompatActivity {
             if (cursor != null && cursor.moveToFirst()) {
                 StringBuilder strBuild = new StringBuilder();
                 String uriString;
+                strBuild.append("FILES FOUND: "+cursor.getCount()+"\n");
                 while (!cursor.isAfterLast()) {
 
 
@@ -196,15 +201,14 @@ public class MainActivity extends AppCompatActivity {
                             .append("\n").append("CRC - " + crc).append("\n").append("FileContent - ").append(readFile(this, uriString));
                     Log.i(TAG, "File cursor " + strBuild);
                     strBuild.append("\n ----------------------").append("\n");
+
                     cursor.moveToNext();
                 }
                 Log.d(TAG, "Query File: " + strBuild);
                 Log.d("Client - Query", "Set test to view =  " + System.currentTimeMillis());
-                //resultView.setText(strBuild);
                 res =strBuild.toString();
             } else {
-                //resultView.setText("No files to query");
-                res="No files to query";
+                res="No files to query for local package "+getPackageName();
             }
         } catch (Exception e) {
             Log.d(TAG, "Files query data error: " + e.getMessage());
@@ -217,6 +221,71 @@ public class MainActivity extends AppCompatActivity {
         return res;
     }
 
+    void insertFile() {
+        String sourcePath = "/sdcard/Android/data/A.txt";
+        String targetPath = "com.ndzl.sst_companionapp/A.txt";
+        Log.i(TAG, "targetPath " + targetPath);
+        Log.i(TAG, "sourcePath " + sourcePath);
+        Log.i(TAG, "*********************************");
+        File file = new File(sourcePath);
+        Log.i(TAG, "file path " + file.getPath() + " length: " + file.length());
+
+        StringBuilder _sb = new StringBuilder();
+        if (!file.exists()) {
+            Toast.makeText(this, "File does not exists in the source", Toast.LENGTH_SHORT).show();
+        } else {
+            Uri cpUriQuery = Uri.parse(AUTHORITY_FILE + getPackageName());
+            Log.i(TAG, "authority  " + cpUriQuery.toString());
+
+            try {
+                ContentValues values = new ContentValues();
+                values.put(COLUMN_TARGET_APP_PACKAGE, String.format("{\"pkgs_sigs\": [{\"pkg\":\"%s\",\"sig\":\"%s\"}]}", getPackageName(), signature));
+                values.put(COLUMN_DATA_NAME, sourcePath);
+                values.put(COLUMN_DATA_TYPE, "3");
+                values.put(COLUMN_DATA_VALUE, targetPath);
+                values.put(COLUMN_DATA_PERSIST_REQUIRED, "false");
+
+                Uri createdRow = getContentResolver().insert(cpUriQuery, values);
+                Log.i(TAG, "SSM Insert File: " + createdRow.toString());
+                //Toast.makeText(this, "File insert success", Toast.LENGTH_SHORT).show();
+                _sb.append("Insert Result: "+createdRow+"\n" );
+            } catch (Exception e) {
+                Log.e(TAG, "SSM Insert File - error: " + e.getMessage() + "\n\n");
+                _sb.append("SSM Insert File - error: " + e.getMessage() + "\n\n");
+            }
+            resultView.setText(_sb);
+            Log.i(TAG, "*********************************");
+        }
+    }
+
+
+
+    public void onClickDeleteFile(View view) {
+
+        //THE FILE YOU WANT TO DELETE MUST BE OVERWRITTEN LOCALLY WITH THE CURRENT PACKAGENAME
+        //BEFORE ACTUAL DELETION. IT COULD ALSO BE AN EMPTY FILE, WITH THE SAME FIELNAME.
+        insertFile();
+
+        //DELETE WORKS ONLY LOCALLY
+        StringBuilder _sb = new StringBuilder();
+        try {
+            _sb.append("DELETING FOR TARGET PACKAGE com.ndzl.sst_companionapp\n");
+            String whereClauseFALSE = "target_app_package='com.ndzl.sst_companionapp' AND data_persist_required='false'";
+            String whereClauseTRUE = "target_app_package='com.ndzl.sst_companionapp' AND data_persist_required='true'";
+
+            Uri cpUriQuery = Uri.parse(AUTHORITY_FILE +getPackageName());
+            int deleteStatusFALSE = getContentResolver().delete(cpUriQuery, whereClauseFALSE, null);// 0 means success
+            int deleteStatusTRUE = getContentResolver().delete(cpUriQuery, whereClauseTRUE, null);// 0 means success
+
+            Log.d(TAG, "File deleted, status = " + deleteStatusFALSE+"+"+deleteStatusTRUE);
+            _sb.append("Target File delete result="+deleteStatusFALSE+"+"+deleteStatusTRUE);
+
+        } catch (Exception e) {
+            Log.d(TAG, "Delete file - error: " + e.getMessage());
+            _sb.append("EXCEPTION in delete result="+e.getMessage());
+        }
+        resultView.setText( _sb.toString());
+    }
 
     String getTargetSDK(){
         int version = 0;
