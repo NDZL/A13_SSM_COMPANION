@@ -270,15 +270,16 @@ public class MainActivity extends AppCompatActivity {
         StringBuilder _sb = new StringBuilder();
         try {
             _sb.append("DELETING FOR TARGET PACKAGE com.ndzl.sst_companionapp\n");
+            String whereClauseALL = "target_app_package='com.ndzl.sst_companionapp'";
             String whereClauseFALSE = "target_app_package='com.ndzl.sst_companionapp' AND data_persist_required='false'";
             String whereClauseTRUE = "target_app_package='com.ndzl.sst_companionapp' AND data_persist_required='true'";
 
             Uri cpUriQuery = Uri.parse(AUTHORITY_FILE +getPackageName());
-            int deleteStatusFALSE = getContentResolver().delete(cpUriQuery, whereClauseFALSE, null);// 0 means success
-            int deleteStatusTRUE = getContentResolver().delete(cpUriQuery, whereClauseTRUE, null);// 0 means success
+            int deleteStatusALL = getContentResolver().delete(cpUriQuery, whereClauseALL, null);// 0 means success
+            //int deleteStatusTRUE = getContentResolver().delete(cpUriQuery, whereClauseTRUE, null);// 0 means success
 
-            Log.d(TAG, "File deleted, status = " + deleteStatusFALSE+"+"+deleteStatusTRUE);
-            _sb.append("Target File delete result="+deleteStatusFALSE+"+"+deleteStatusTRUE);
+            Log.d(TAG, "File deleted, status = " + deleteStatusALL);
+            _sb.append("Target File delete result="+deleteStatusALL/*+"+"+deleteStatusTRUE*/);
 
         } catch (Exception e) {
             Log.d(TAG, "Delete file - error: " + e.getMessage());
