@@ -5,13 +5,17 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
 import android.database.Cursor;
+import android.database.DataSetObserver;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
@@ -29,6 +33,11 @@ import java.io.InputStreamReader;
 public class MainActivity extends AppCompatActivity {
 
     TextView resultView;
+    LocalContentObserver myContentObserver;
+    LocalDataSetObserver myDataSetObserver;
+    Uri cpUri;
+    private final String AUTHORITY = "content://com.zebra.securestoragemanager.securecontentprovider/data";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +45,30 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         resultView = findViewById(R.id.result);
         resultView.setText("Scoped Storage Companion App\n"+getAndroidAPI()+"\n"+getTargetSDK()+"\nisExternalStorageManager:"+ Environment.isExternalStorageManager());
+
+        //REGISTER FILE NOTIFICATION RECEIVER
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("com.zebra.configFile.action.notify");
+        filter.addCategory("android.intent.category.DEFAULT");
+        registerReceiver(new FileNotificationReceiver(), filter);
+
+        //OBSERVER FOR DATA SHARING VIA SSM FROM DIFFERENT APP
+        cpUri = Uri.parse(AUTHORITY);
+        myContentObserver = new LocalContentObserver(null);
+        myDataSetObserver = new LocalDataSetObserver();
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        getContentResolver().registerContentObserver(cpUri, true, myContentObserver);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        getContentResolver().unregisterContentObserver(myContentObserver);
     }
 
     public void onClickManageExternalStorage(View view){
@@ -135,6 +168,62 @@ public class MainActivity extends AppCompatActivity {
         resultView.setText(sb.toString());
     }
 
+    public void onClickSSMDataQuery(View view){
+
+        StringBuilder sb = new StringBuilder();
+        sb.append( ssmQueryData() );
+
+        resultView.setText(sb.toString());
+    }
+
+    String ssmQueryData(){
+        //TO GET DATA SHARED BY OTHER APP
+        return "hi!\nI can see "+ssm_notpersisted_countRecords()+" not-persisted recs in your SSM\nAnd " + ssm_ispersisted_countRecords()+" persisted recs";
+    }
+
+    int ssm_notpersisted_countRecords() {
+        Uri cpUriQuery = Uri.parse(AUTHORITY + "/[" + getPackageName() + "]");
+        String selection = COLUMN_TARGET_APP_PACKAGE + " = '" + getPackageName() + "'" + " AND " + COLUMN_DATA_PERSIST_REQUIRED + " = 'false'" + " AND " + COLUMN_DATA_TYPE + " = '" + "1" + "'";
+
+        int _count=0;
+        Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(cpUriQuery, null, selection, null, null);
+            _count = cursor.getCount();
+        } catch (Exception e) {
+            Log.d(TAG, "Error: " + e.getMessage());
+        }
+        finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+
+        return _count;
+    }
+
+    int ssm_ispersisted_countRecords() {
+        Uri cpUriQuery = Uri.parse(AUTHORITY + "/[" + getPackageName() + "]");
+        String selection = COLUMN_TARGET_APP_PACKAGE + " = '" + getPackageName() + "'" + " AND " + COLUMN_DATA_PERSIST_REQUIRED + " = 'true'" + " AND " + COLUMN_DATA_TYPE + " = '" + "1" + "'";
+
+        int _count=0;
+        Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(cpUriQuery, null, selection, null, null);
+            cursor.registerDataSetObserver(myDataSetObserver);
+            _count = cursor.getCount();
+        } catch (Exception e) {
+            Log.d(TAG, "Error: " + e.getMessage());
+        }
+        finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+        cursor.unregisterDataSetObserver(myDataSetObserver);
+        return _count;
+    }
+
     public void onClickSSMReadFile(View view){
 
         StringBuilder sb = new StringBuilder();
@@ -222,7 +311,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void insertFile() {
-        String sourcePath = "/sdcard/Android/data/A.txt";
+        //String sourcePath = "/sdcard/Download/A.txt";  //GOOD FOR SD660 CHIPSET
+        String sourcePath = "/sdcard/Android/data/A.txt";  //GOOD FOR 6490 CHIPSET TC58
         String targetPath = "com.ndzl.sst_companionapp/A.txt";
         Log.i(TAG, "targetPath " + targetPath);
         Log.i(TAG, "sourcePath " + sourcePath);
@@ -322,4 +412,38 @@ public class MainActivity extends AppCompatActivity {
         return  _sb_who;
     }
 
+}
+class LocalContentObserver extends ContentObserver {
+    public LocalContentObserver(Handler handler) {
+        super(handler);
+    }
+
+    @Override
+    public void onChange(boolean selfChange) {
+        this.onChange(selfChange, null);
+        Log.d("LocalContentObserver", "### received self change notification from uri: ");
+    }
+
+    @Override
+    public void onChange(boolean selfChange, Uri uri) {
+        Log.d("LocalContentObserver", "### received notification from uri: " + uri.toString());
+    }
+}
+
+class LocalDataSetObserver extends DataSetObserver {
+    public LocalDataSetObserver() {
+
+    }
+
+    @Override
+    public void onInvalidated() {
+        super.onInvalidated();
+        Log.d("LocalDataSetObserver", "onInvalidate");
+    }
+
+    @Override
+    public void onChanged() {
+        super.onChanged();
+        Log.d("LocalDataSetObserver", "onChanged");
+    }
 }

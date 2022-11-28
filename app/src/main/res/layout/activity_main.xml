@@ -73,6 +73,24 @@
             android:onClick="onClickDeleteFile"
             android:text="SSM DEL A.txt" />
     </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="3dp"
+            android:layout_marginRight="3dp"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/btn_SSMDataQuery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="3dp"
+                android:layout_marginRight="3dp"
+                android:layout_weight="0.5"
+                android:onClick="onClickSSMDataQuery"
+                android:text="SSM DATA QUERY" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/result"
             android:layout_width="wrap_content"
