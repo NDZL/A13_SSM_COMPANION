@@ -46,6 +46,10 @@ public class MainActivity extends AppCompatActivity {
         resultView = findViewById(R.id.result);
         resultView.setText("Scoped Storage Companion App\n"+getAndroidAPI()+"\n"+getTargetSDK()+"\nisExternalStorageManager:"+ Environment.isExternalStorageManager());
 
+        //TESTING EXTERNAL STORAGE
+        String extStoragePaths = getFoldersPath();
+        resultView.setText(  resultView.getText()+"\n"+extStoragePaths);
+
         //REGISTER FILE NOTIFICATION RECEIVER
         IntentFilter filter = new IntentFilter();
         filter.addAction("com.zebra.configFile.action.notify");
@@ -56,6 +60,21 @@ public class MainActivity extends AppCompatActivity {
         cpUri = Uri.parse(AUTHORITY);
         myContentObserver = new LocalContentObserver(null);
         myDataSetObserver = new LocalDataSetObserver();
+    }
+
+
+    String getFoldersPath(){
+        StringBuilder sb = new StringBuilder();
+        sb.append("getExternalFilesDirs()=");
+        for(File f:getExternalFilesDirs(null)){
+            sb.append(" "+f.getPath());
+        }
+
+        sb.append("\n\n\tgetExternalStorageDirectory()=");
+        sb.append(" "+	Environment.getExternalStorageDirectory().getPath());
+
+        return sb.toString();
+
     }
 
 
