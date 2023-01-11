@@ -54,7 +54,7 @@
             android:layout_marginRight="3dp"
             android:layout_weight="0.5"
             android:onClick="onClickSSMReadFile"
-            android:text="SSM FILE, READ A.txt" />
+            android:text="SSM FILE, READ EVERYTHING" />
 
         <Button
             android:id="@+id/btn_SSMFileDEL"
@@ -64,7 +64,7 @@
             android:layout_marginRight="3dp"
             android:layout_weight="0.5"
             android:onClick="onClickDeleteFile"
-            android:text="SSM FILE, (JUST) DEL A.txt" />
+            android:text="SSM FILE, DELETE ALL FOR THIS APP" />
         <Button
             android:id="@+id/btn_SSMFileOVRWRDEL"
             android:layout_width="match_parent"
@@ -73,7 +73,7 @@
             android:layout_marginRight="3dp"
             android:layout_weight="0.5"
             android:onClick="onClickOverwriteDeleteFile"
-            android:text="SSM FILE, OVERWRITE &amp; DEL A.txt" />
+            android:text="SSM FILE, CREATE FROM THIS APP" />
     </LinearLayout>
 
         <LinearLayout
