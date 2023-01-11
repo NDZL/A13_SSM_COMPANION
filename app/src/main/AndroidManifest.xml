@@ -32,9 +32,11 @@
                 android:name="android.app.lib_name"
                 android:value="" />
         </activity>
-        <receiver android:name=".FileNotificationReceiver" android:exported="true">
+        <receiver android:name=".FileNotificationReceiver" android:exported="false">
             <intent-filter >
                 <action android:name="com.zebra.configFile.action.notify" />
+
+                <action android:name="com.ndzl.DW" />
             </intent-filter>
         </receiver>
     </application>

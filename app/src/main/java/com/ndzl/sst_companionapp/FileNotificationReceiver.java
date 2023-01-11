@@ -4,13 +4,18 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 
 public class FileNotificationReceiver extends BroadcastReceiver  {
+
 
     @Override
     public void onReceive(final Context context, Intent intent) {
 
+        Log.d("FileNotificationReceiver", "## event received ");
         if (intent != null && intent.getAction().equals("com.zebra.configFile.action.notify")) {
+
+            Log.d("FileNotificationReceiver", "### A file was shared with this app! ");
 
             Bundle extras = intent.getExtras();
 

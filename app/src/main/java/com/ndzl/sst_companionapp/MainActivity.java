@@ -2,6 +2,7 @@ package com.ndzl.sst_companionapp;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -26,9 +27,13 @@ import android.widget.Toast;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -60,11 +65,25 @@ public class MainActivity extends AppCompatActivity {
         cpUri = Uri.parse(AUTHORITY);
         myContentObserver = new LocalContentObserver(null);
         myDataSetObserver = new LocalDataSetObserver();
+
+        registerReceivers();
+    }
+
+    private BroadcastReceiver receiver;
+    void registerReceivers() {
+        receiver = new FileNotificationReceiver();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("com.zebra.configFile.action.notify");
+        filter.addAction("com.ndzl.DW");
+        filter.addCategory("android.intent.category.DEFAULT");
+        Intent regres = registerReceiver(receiver, filter);
     }
 
 
     String getFoldersPath(){
         StringBuilder sb = new StringBuilder();
+        sb.append("getFilesDir()="+getFilesDir()+"\n\n");
+
         sb.append("getExternalFilesDirs()=");
         for(File f:getExternalFilesDirs(null)){
             sb.append(" "+f.getPath());
@@ -329,10 +348,68 @@ public class MainActivity extends AppCompatActivity {
         return res;
     }
 
-    void insertFile() {
+   void insertFile() {
         //String sourcePath = "/sdcard/Download/A.txt";  //GOOD FOR SD660 CHIPSET
-        String sourcePath = "/sdcard/Android/data/A.txt";  //GOOD FOR 6490 CHIPSET TC58
-        String targetPath = "com.ndzl.sst_companionapp/A.txt";
+        //String sourcePath = "/sdcard/Android/data/A.txt";  //GOOD FOR 6490 CHIPSET TC58
+
+       //TC58 - A.txt created via adb push from console
+       // -rw-rw---- 1 u0_a227 media_rw 2506 2023-01-11 11:16 /sdcard/Download/A.txt
+       // -rw-rw-rw- 1 shell ext_data_rw 2506 2023-01-11 11:16 /sdcard/Android/data/A.txt
+       //TC58 - *.txt created from inside the app
+       // -rw-rw-rw- 1 u0_a229 u0_a229 11 2023-01-11 16:32 /enterprise/usr/persist/B.txt  ok for ssm, (after Runtime.getRuntime().exec("chmod 666 " + sourcePath); on B.txt)
+       // -rw-rw---- 1 u0_a227 media_rw 11 2023-01-11 17:24 /storage/emulated/0/Documents/H.txt   ok for ssm, though chmod failed
+       // -rw-rw---- 1 u0_a227 media_rw 11 2023-01-11 17:26 /sdcard/Download/J.txt    ok for ssm, though chmod failed
+
+
+       //TC21 - A.txt created via adb push from console
+       // -rw-rw---- 1 root everybody 2506 2023-01-11 10:16 /sdcard/Download/A.txt
+       // -rw-rw---- 1 root sdcard_rw 2506 2023-01-11 10:16 /sdcard/Android/data/A.txt
+       //TC21 - *.txt created from inside the app
+       // -rw-rw-rw- 1 u0_a212 u0_a212 11 2023-01-11 15:36 /enterprise/usr/persist/C.txt ok for ssm,((after Runtime.getRuntime().exec("chmod 666 " + sourcePath); on C.txt))
+       // so chmod looks promising to allow ssm to access the shared file at least for files in /enterprise/usr/persist
+       // chmod not working for getExternalFilesDirs() so not for smm which is not able to access that folders
+       // Environment.getExternalStorageDirectory().getPath()+"/"+filename;   NOT an option, operation not permitted
+       //  String sourcePath = getFilesDir()+"/"+filename;  NOT an option
+       // "/sdcard/Android/data/"+filename NOT an option
+       // -rw-rw---- 1 root everybody 11 2023-01-11 15:57 /sdcard/Download/E.txt ok for ssm, though chmod failed
+       // -rw-rw---- 1 root everybody 11 2023-01-11 16:17 /storage/emulated/0/Documents/G.txt  ok for ssm, though chmod failed
+
+
+
+       String filename = "K.txt";
+
+       //String sourcePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)+"/"+filename;
+       String sourcePath = "/enterprise/usr/persist"+"/"+filename;
+
+
+       /*
+       /storage/emulated/0/Documents/G.txt ok
+        String sourcePath = getFilesDir()+"/"+filename;  //no
+       String sourcePath = Environment.getExternalStorageDirectory().getPath()+"/"+filename; // no
+       for(File f:getExternalFilesDirs(null)){  //==> getExternalFilesDirs: no
+           sourcePath = f.getPath()+"/"+filename;
+           break;
+       }
+        */
+       //sourcePath = "/enterprise/usr/persist/"+filename; yes + chmod
+
+       try {
+           File f = new File(sourcePath);
+           if (f.exists()) {
+               f.delete();
+       }
+
+           f.createNewFile();
+           Runtime.getRuntime().exec("chmod 666 " + sourcePath); //cdmod working on A11 /enterprise/usr/persist!
+
+           FileOutputStream fos = new FileOutputStream(f);
+           fos.write("hello zebra".getBytes(StandardCharsets.UTF_8));
+           fos.close();
+       } catch (IOException e) {
+           e.printStackTrace();
+       }
+
+       String targetPath = "com.ndzl.sst_companionapp/"+filename;
         Log.i(TAG, "targetPath " + targetPath);
         Log.i(TAG, "sourcePath " + sourcePath);
         Log.i(TAG, "*********************************");
@@ -367,15 +444,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
-
-    public void onClickDeleteFile(View view) {
-
-        //THE FILE YOU WANT TO DELETE MUST BE OVERWRITTEN LOCALLY WITH THE CURRENT PACKAGENAME
-        //BEFORE ACTUAL DELETION. IT COULD ALSO BE AN EMPTY FILE, WITH THE SAME FIELNAME.
-        insertFile();
-
-        //DELETE WORKS ONLY LOCALLY
+    void deleteLocally(){
         StringBuilder _sb = new StringBuilder();
         try {
             _sb.append("DELETING FOR TARGET PACKAGE com.ndzl.sst_companionapp\n");
@@ -388,14 +457,27 @@ public class MainActivity extends AppCompatActivity {
             //int deleteStatusTRUE = getContentResolver().delete(cpUriQuery, whereClauseTRUE, null);// 0 means success
 
             Log.d(TAG, "File deleted, status = " + deleteStatusALL);
-            _sb.append("Target File delete result="+deleteStatusALL/*+"+"+deleteStatusTRUE*/);
+            _sb.append("\nTarget File delete result="+deleteStatusALL/*+"+"+deleteStatusTRUE*/);
 
         } catch (Exception e) {
             Log.d(TAG, "Delete file - error: " + e.getMessage());
-            _sb.append("EXCEPTION in delete result="+e.getMessage());
+            _sb.append("\nEXCEPTION in delete result="+e.getMessage());
         }
         resultView.setText( _sb.toString());
     }
+
+    public void onClickDeleteFile(View view) {
+
+        deleteLocally();
+    }
+
+    public void onClickOverwriteDeleteFile(View view) {
+
+        insertFile();
+        //deleteLocally();
+    }
+
+
 
     String getTargetSDK(){
         int version = 0;
