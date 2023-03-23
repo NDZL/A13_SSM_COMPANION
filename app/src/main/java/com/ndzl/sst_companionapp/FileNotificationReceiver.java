@@ -15,7 +15,9 @@ public class FileNotificationReceiver extends BroadcastReceiver  {
         Log.d("FileNotificationReceiver", "## event received ");
         if (intent != null && intent.getAction().equals("com.zebra.configFile.action.notify")) {
 
-            Log.d("FileNotificationReceiver", "### A file was shared with this app! ");
+            //NOTIFICATION EVENTUALLY RECEIVED ON BSP 13-08-07
+
+            Log.d("FileNotificationReceiver", "### SSM com.zebra.configFile.action.notify ");
 
             Bundle extras = intent.getExtras();
 

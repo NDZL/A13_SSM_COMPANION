@@ -34,9 +34,8 @@
         </activity>
         <receiver android:name=".FileNotificationReceiver" android:exported="false">
             <intent-filter >
-                <action android:name="com.zebra.configFile.action.notify" />
-
                 <action android:name="com.ndzl.DW" />
+                <action android:name="com.zebra.configFile.action.notify" />
             </intent-filter>
         </receiver>
     </application>

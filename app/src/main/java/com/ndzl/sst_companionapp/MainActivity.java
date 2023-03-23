@@ -3,6 +3,7 @@ package com.ndzl.sst_companionapp;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.BroadcastReceiver;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -20,26 +21,22 @@ import android.os.Handler;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends AppCompatActivity {
 
     TextView resultView;
-    LocalContentObserver myContentObserver;
-    LocalDataSetObserver myDataSetObserver;
     Uri cpUri;
     private final String AUTHORITY = "content://com.zebra.securestoragemanager.securecontentprovider/data";
 
@@ -55,28 +52,35 @@ public class MainActivity extends AppCompatActivity {
         String extStoragePaths = getFoldersPath();
         resultView.setText(  resultView.getText()+"\n"+extStoragePaths);
 
-        //REGISTER FILE NOTIFICATION RECEIVER
-        IntentFilter filter = new IntentFilter();
-        filter.addAction("com.zebra.configFile.action.notify");
-        filter.addCategory("android.intent.category.DEFAULT");
-        registerReceiver(new FileNotificationReceiver(), filter);
+
 
         //OBSERVER FOR DATA SHARING VIA SSM FROM DIFFERENT APP
         cpUri = Uri.parse(AUTHORITY);
-        myContentObserver = new LocalContentObserver(null);
-        myDataSetObserver = new LocalDataSetObserver();
 
         registerReceivers();
+
+/*        try {
+            readFileURI(this,"/storage/emulated/0/Download/DOWNLOAD.txt");  //TESTING ALLAN IDEA OF CHANGING FILE PERMISSIONS BEFORE INVOKING SSM INSERT: DOES NOT WORK
+        } catch (IOException e) {
+            e.printStackTrace();
+        }*/
+
+
     }
 
     private BroadcastReceiver receiver;
     void registerReceivers() {
-        receiver = new FileNotificationReceiver();
+
+        //REGISTER FILE NOTIFICATION RECEIVER
         IntentFilter filter = new IntentFilter();
+        filter.addAction("com.zebra.configFile.action.notify");
+        filter.addCategory("android.intent.category.DEFAULT");
+
         filter.addAction("com.zebra.configFile.action.notify");
         filter.addAction("com.ndzl.DW");
         filter.addCategory("android.intent.category.DEFAULT");
-        Intent regres = registerReceiver(receiver, filter);
+
+        Intent regres = registerReceiver(new FileNotificationReceiver(), filter);
     }
 
 
@@ -92,6 +96,19 @@ public class MainActivity extends AppCompatActivity {
         sb.append("\n\n\tgetExternalStorageDirectory()=");
         sb.append(" "+	Environment.getExternalStorageDirectory().getPath());
 
+/*
+        //sb.append("\n\ngetDataDirectory()="+Environment.getDataDirectory().getAbsolutePath());
+        String filename = "myfile.txt";
+        String fileContents = "Hello world!";
+        try (FileOutputStream fos = this.openFileOutput(filename, Context.MODE_PRIVATE)) {
+            fos.write(fileContents.getBytes(StandardCharsets.ISO_8859_1));
+        } catch (FileNotFoundException e) {
+
+        } catch (IOException e) {
+
+        }
+*/
+
         return sb.toString();
 
     }
@@ -100,13 +117,34 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        getContentResolver().registerContentObserver(cpUri, true, myContentObserver);
+
+        //WHEN INSERTING IN SSMDATAPERSIST, URI=content://com.zebra.securestoragemanager.securecontentprovider/data/[com.ndzl.sst_companionapp]
+        //github code is registering URI=content://com.zebra.securestoragemanager.securecontentprovider/data AND THIS IS NOT RECEIVING ANY NOTIFICATION
+
+        Uri packageURI = Uri.parse(AUTHORITY + "/[" + getPackageName() + "]");
+        Log.d(TAG, "registerContentObserver / URI="+packageURI);
+
+        //from https://techdocs.zebra.com/flux/api/#callbacks
+        ContentResolver cr = getContentResolver();
+        cr.registerContentObserver( packageURI , false, //package+false to limit the number of events notified
+                new ContentObserver(new Handler(getMainLooper())) {
+
+                    @Override
+                    public void onChange(boolean selfChange, Uri uri) {
+                        super.onChange(selfChange, uri);
+                        Log.d(TAG, "content has changed, uri = " + uri);
+                        //you can now access content provider data
+                        Toast.makeText(getApplicationContext(), "SSM: new data available!", Toast.LENGTH_SHORT).show();
+
+                    }
+                });
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        getContentResolver().unregisterContentObserver(myContentObserver);
+        //getContentResolver().unregisterContentObserver(...);
+
     }
 
     public void onClickManageExternalStorage(View view){
@@ -174,7 +212,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         try{
-            br = new BufferedReader(new InputStreamReader(new FileInputStream("/sdcard/Android/data/com.zebra.ssmdatapersist/app.xml"),"utf-8"));
+            br = new BufferedReader(new InputStreamReader(new FileInputStream("/sdcard/Android/data/com.zebra.ssmdatapersist/files/app.xml"),"utf-8"));
             androidDataAppLines = ""+br.readLine().length();
             br.close();
         } catch (IOException e) {
@@ -198,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
         sb.append("\n1st line len in /sdcard/personal/mars.txt:"+personalLines);
         sb.append("\n1st line len in /sdcard/Download/moon.xml:"+downloadLines);
         sb.append("\n1st line len in /storage/emulated/0/Download/nesd.txt:"+emulatedLines);
-        sb.append("\n1st line len in /sdcarmarsd/Documents/doc.txt:"+docsLines);
+        sb.append("\n1st line len in /sdcard/Documents/doc.txt:"+docsLines);
         sb.append("\n1st line len in /sdcard/Android/data/com.zebra.ssmdatapersist/app.xml:"+androidDataAppLines);
         sb.append("\n1st line len in /enterprise/usr/persist/enterprise.txt:"+enterpriseLines);
 
@@ -248,7 +286,7 @@ public class MainActivity extends AppCompatActivity {
         Cursor cursor = null;
         try {
             cursor = getContentResolver().query(cpUriQuery, null, selection, null, null);
-            cursor.registerDataSetObserver(myDataSetObserver);
+            //cursor.registerDataSetObserver(myDataSetObserver);
             _count = cursor.getCount();
         } catch (Exception e) {
             Log.d(TAG, "Error: " + e.getMessage());
@@ -258,20 +296,14 @@ public class MainActivity extends AppCompatActivity {
                 cursor.close();
             }
         }
-        cursor.unregisterDataSetObserver(myDataSetObserver);
+       // cursor.unregisterDataSetObserver(myDataSetObserver);
         return _count;
     }
 
     public void onClickSSMReadFile(View view){
 
         StringBuilder sb = new StringBuilder();
-        sb.append(ssmQueryFile());
-/*        try {
-            sb.append( readFile(this, "content://com.zebra.securestoragemanager.SecureFileProvider/data/com.zebra.ssmfilepersist/0/A.txt") ) ;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }*/
-
+        sb.append(ssmQueryFile(false));
         resultView.setText(sb.toString());
     }
 
@@ -285,7 +317,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "SSMCompanionApp : ";
 
     private final String signature = "";
-    String ssmQueryFile() {
+    String ssmQueryFile(boolean isReadFromWorkProfile) {
         Uri uriFile = Uri.parse(RETRIEVE_AUTHORITY);
         String selection = "target_app_package='com.ndzl.sst_companionapp'"; //GETS *ALL FILES* FOR THE PACKAGE NO PERSISTANCE FILTER
         //String selection = "target_app_package='com.ndzl.sst_companionapp'AND data_persist_required='false'"; //GETS *ALL FILES* FOR THE PACKAGE
@@ -320,12 +352,15 @@ public class MainActivity extends AppCompatActivity {
 
 
                     uriString = cursor.getString(cursor.getColumnIndex("secure_file_uri"));
+                    if(isReadFromWorkProfile)
+                        uriString = uriString.replace("/0/", "/10/"); //ATTEMPT TO  ACCESS WORK PROFILE SSM FROM MAIN USER => Permission Denial: reading com.zebra.securestoragemanager.SecureFileProvider uri content://com.zebra.securestoragemanager.SecureFileProvider/user_de/data/user_de/10/com.zebra.securestoragemanager/files/com.ndzl.sst_companionapp/enterprise.txt from pid=19235, uid=10216 requires the provider be exported, or grantUriPermission()
+
                     String fileName = cursor.getString(cursor.getColumnIndex("secure_file_name"));
                     String isDir = cursor.getString(cursor.getColumnIndex("secure_is_dir"));
                     String crc = cursor.getString(cursor.getColumnIndex("secure_file_crc"));
                     strBuild.append("\n");
                     strBuild.append("URI - " + uriString).append("\n").append("FileName - " + fileName).append("\n").append("IS Directory - " + isDir)
-                            .append("\n").append("CRC - " + crc).append("\n").append("FileContent - ").append(readFile(this, uriString));
+                            .append("\n").append("CRC - " + crc).append("\n").append("FileContent - ").append(readFileURI(this, uriString));
                     Log.i(TAG, "File cursor " + strBuild);
                     strBuild.append("\n ----------------------").append("\n");
 
@@ -350,29 +385,50 @@ public class MainActivity extends AppCompatActivity {
 
    void insertFile() {
         //String sourcePath = "/sdcard/Download/A.txt";  //GOOD FOR SD660 CHIPSET
-        //String sourcePath = "/sdcard/Android/data/A.txt";  //GOOD FOR 6490 CHIPSET TC58
+        //String sourcePath = "/sdcard/Android/data/A.txt";  //GOOD FOR 6490 CHIPSET TC58  THIS PATH IS MEANINGLESS
 
        //TC58 - A.txt created via adb push from console
-       // -rw-rw---- 1 u0_a227 media_rw 2506 2023-01-11 11:16 /sdcard/Download/A.txt
-       // -rw-rw-rw- 1 shell ext_data_rw 2506 2023-01-11 11:16 /sdcard/Android/data/A.txt
-       //TC58 - *.txt created from inside the app
-       // -rw-rw-rw- 1 u0_a229 u0_a229 11 2023-01-11 16:32 /enterprise/usr/persist/B.txt  ok for ssm, (after Runtime.getRuntime().exec("chmod 666 " + sourcePath); on B.txt)
-       // -rw-rw---- 1 u0_a227 media_rw 11 2023-01-11 17:24 /storage/emulated/0/Documents/H.txt   ok for ssm, though chmod failed
-       // -rw-rw---- 1 u0_a227 media_rw 11 2023-01-11 17:26 /sdcard/Download/J.txt    ok for ssm, though chmod failed
+       // -rw-rw-rw- 1 shell shell 23 2023-02-09 10:58 /enterprise/usr/persist/enterprise.txt   BSP 13-08-07.00-TG-U00-PRD-ATH-04   pushed by adb       CAN SUCCESSFULLY BE READ BY COMPANION APP!
+
+       //TC58 - *.txt created from inside the app  - QC6490
+       // -rw------- 1 u0_a253 u0_a253 598 2023-01-13 18:43 /enterprise/usr/persist/enterprise.txt (can chmod 666)                                    ok for ssm, (after Runtime.getRuntime().exec("chmod 666 " + sourcePath); on B.txt)
+       // -rw-rw---- 1 u0_a227 media_rw 11 2023-01-11 17:26 /sdcard/Download/J.txt                                          ok for ssm, though chmod failed
+       // -rw-rw---- 1 u0_a227 media_rw 11 2023-01-11 17:24 /storage/emulated/0/Documents/H.txt                             ok for ssm, though chmod failed
+       // -rw------- 1 u0_a253 ext_data_rw 598 2023-01-13 18:30
+       //
+       // JUST WRITE
+       // -rw------- 1 u0_a0 u0_a0 598 2023-02-09 11:08 /enterprise/usr/persist/enterprise.txt  BSP 13-08-07.00-TG-U00-PRD-ATH-04   created by different app    CANNOT BE ACCESSED BY COMPANION APP "EACCES EXCEPTION", NO DOWNLOAD BY ADB
+       //   adb shell cat /enterprise/usr/persist/enterprise.txt
+       //       cat: /enterprise/usr/persist/enterprise.txt: Permission denied
+       //   adb shell pull  /enterprise/usr/persist/enterprise.txt
+       //       /system/bin/sh: pull: inaccessible or not found
+       //
+       // WRITE + CHMOD 666
+       //   -rw-rw-rw- 1 u0_a2 u0_a2 598 2023-02-09 11:26 /enterprise/usr/persist/enterprise.txt    BSP 13-08-07.00-TG-U00-PRD-ATH-04   created by different app plus chmod 666: CAN BE READ BY COMPANION APP AND DOWNLOADED BY ADB
+       //   adb shell cat /enterprise/usr/persist/enterprise.txt    ok!
+       //       {-1828006424942088987;8649deac-1915-4581-8858-14541184b5f6}
+       //       {-7105378089876617077;f423ce7b-5e85-4d78-9110-b6e6e2c5c925}
+
+
+       //    /sdcard/Android/data/com.zebra.ssmdatapersist/files/app.xml (can chmod 666)
+
+
 
 
        //TC21 - A.txt created via adb push from console
        // -rw-rw---- 1 root everybody 2506 2023-01-11 10:16 /sdcard/Download/A.txt
-       // -rw-rw---- 1 root sdcard_rw 2506 2023-01-11 10:16 /sdcard/Android/data/A.txt
-       //TC21 - *.txt created from inside the app
-       // -rw-rw-rw- 1 u0_a212 u0_a212 11 2023-01-11 15:36 /enterprise/usr/persist/C.txt ok for ssm,((after Runtime.getRuntime().exec("chmod 666 " + sourcePath); on C.txt))
+       //TC21 - *.txt created from inside the app - SD660
+       // -rw------- 1 u0_a215 u0_a215  598 2023-01-13 17:39 /enterprise/usr/persist/enterprise.txt (can chmod 666)                                       ok for ssm,((after Runtime.getRuntime().exec("chmod 666 " + sourcePath); on C.txt))
+       // -rw-rw---- 1 root everybody 11 2023-01-11 15:57 /sdcard/Download/E.txt                                             ok for ssm, though chmod failed
+       // -rw-rw---- 1 root everybody 11 2023-01-11 16:17 /storage/emulated/0/Documents/G.txt                               ok for ssm, though chmod failed
+       // -rw-rw---- 1 u0_a215 sdcard_rw 598 2023-01-13 17:39
+       //    /sdcard/Android/data/com.zebra.ssmdatapersist/files/app.xml (can *not* chmod 666)
+
        // so chmod looks promising to allow ssm to access the shared file at least for files in /enterprise/usr/persist
        // chmod not working for getExternalFilesDirs() so not for smm which is not able to access that folders
        // Environment.getExternalStorageDirectory().getPath()+"/"+filename;   NOT an option, operation not permitted
        //  String sourcePath = getFilesDir()+"/"+filename;  NOT an option
        // "/sdcard/Android/data/"+filename NOT an option
-       // -rw-rw---- 1 root everybody 11 2023-01-11 15:57 /sdcard/Download/E.txt ok for ssm, though chmod failed
-       // -rw-rw---- 1 root everybody 11 2023-01-11 16:17 /storage/emulated/0/Documents/G.txt  ok for ssm, though chmod failed
 
 
 
@@ -471,10 +527,16 @@ public class MainActivity extends AppCompatActivity {
         deleteLocally();
     }
 
-    public void onClickOverwriteDeleteFile(View view) {
+    public void onClickShareLocalFile(View view) {
 
         insertFile();
-        //deleteLocally();
+
+    }
+
+    public void onClickReadWorkProfileFile(View view) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(ssmQueryFile(true));
+        resultView.setText(sb.toString());
     }
 
 
@@ -495,7 +557,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private String readFile(Context context, String uriString) throws IOException {
+    private String readFileURI(Context context, String uriString) throws IOException {
         InputStream inputStream = context.getContentResolver().openInputStream(Uri.parse(uriString));
         InputStreamReader isr = new InputStreamReader(inputStream);
         BufferedReader bufferedReader = new BufferedReader(isr);
@@ -504,7 +566,7 @@ public class MainActivity extends AppCompatActivity {
         while ((line = bufferedReader.readLine()) != null) {
             sb.append(line);
         }
-        Log.d(TAG, "full content = " + sb);
+        Log.d(TAG, "readFileURI "+uriString+" <" + sb+">");
         return sb.toString();
     }
 
@@ -513,38 +575,4 @@ public class MainActivity extends AppCompatActivity {
         return  _sb_who;
     }
 
-}
-class LocalContentObserver extends ContentObserver {
-    public LocalContentObserver(Handler handler) {
-        super(handler);
-    }
-
-    @Override
-    public void onChange(boolean selfChange) {
-        this.onChange(selfChange, null);
-        Log.d("LocalContentObserver", "### received self change notification from uri: ");
-    }
-
-    @Override
-    public void onChange(boolean selfChange, Uri uri) {
-        Log.d("LocalContentObserver", "### received notification from uri: " + uri.toString());
-    }
-}
-
-class LocalDataSetObserver extends DataSetObserver {
-    public LocalDataSetObserver() {
-
-    }
-
-    @Override
-    public void onInvalidated() {
-        super.onInvalidated();
-        Log.d("LocalDataSetObserver", "onInvalidate");
-    }
-
-    @Override
-    public void onChanged() {
-        super.onChanged();
-        Log.d("LocalDataSetObserver", "onChanged");
-    }
 }
