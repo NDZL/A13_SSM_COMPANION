@@ -3,6 +3,7 @@ package com.ndzl.sst_companionapp;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -18,6 +19,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.ParcelFileDescriptor;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
@@ -26,6 +28,7 @@ import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -46,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         resultView = findViewById(R.id.result);
-        resultView.setText("Scoped Storage Companion App\n"+getAndroidAPI()+"\n"+getTargetSDK()+"\nisExternalStorageManager:"+ Environment.isExternalStorageManager());
+        resultView.setText("Companion App\n"+getAndroidAPI()+"\n"+getTargetSDK()+"\nisExternalStorageManager:"+ Environment.isExternalStorageManager());
 
         //TESTING EXTERNAL STORAGE
         String extStoragePaths = getFoldersPath();
@@ -64,9 +67,50 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }*/
+        String urioutput="N/A";
+        Intent intent = getIntent();
+        ClipData clipData = intent.getClipData();
+        if (clipData!=null && clipData.getItemCount() == 1) {
+            ClipData.Item item = clipData.getItemAt(0);
+            Uri uri = item.getUri();
+            String content = readUri(uri);
+            if (content == null) {
+                urioutput= "Error reading Uri ".concat(uri.toString());
+            } else {
+                urioutput = content;
+            }
+        }
 
 
     }
+
+    private String readUri(Uri uri) {
+        InputStream inputStream = null;
+        try {
+            inputStream = getContentResolver().openInputStream(uri);
+            if (inputStream != null) {
+                byte[] buffer = new byte[1024];
+                int result;
+                String content = "";
+                while ((result = inputStream.read(buffer)) != -1) {
+                    content = content.concat(new String(buffer, 0, result));
+                }
+                return content;
+            }
+        } catch (IOException e) {
+            Log.e("receiver", "IOException when reading uri", e);
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException e) {
+                    Log.e("receiver", "IOException when closing stream", e);
+                }
+            }
+        }
+        return null;
+    }
+
 
     private BroadcastReceiver receiver;
     void registerReceivers() {
@@ -118,10 +162,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
-        //WHEN INSERTING IN SSMDATAPERSIST, URI=content://com.zebra.securestoragemanager.securecontentprovider/data/[com.ndzl.sst_companionapp]
-        //github code is registering URI=content://com.zebra.securestoragemanager.securecontentprovider/data AND THIS IS NOT RECEIVING ANY NOTIFICATION
 
-        Uri packageURI = Uri.parse(AUTHORITY + "/[" + getPackageName() + "]");
+        Uri packageURI = Uri.parse(AUTHORITY + "/[" + getPackageName() + "]"); //more specific Uri + FALSE IN registerContentObserver
+        //Uri packageURI = Uri.parse(AUTHORITY ); //generic Uri getting 3rd party apps notifications + TRUE in the flag of registerContentObserver
         Log.d(TAG, "registerContentObserver / URI="+packageURI);
 
         //from https://techdocs.zebra.com/flux/api/#callbacks
@@ -252,6 +295,15 @@ public class MainActivity extends AppCompatActivity {
         resultView.setText(sb.toString());
     }
 
+    //
+    public void onClickReadFromFileProvider(View view){
+
+        StringBuilder sb = new StringBuilder();
+        // sb.append( fpQueryFile(Uri.parse("content://com.ndzl.targetelevator.provider/cache_files/ndzl4ssm.txt")) );
+
+        sb.append( readUri( Uri.parse("content://com.ndzl.targetelevator.provider/cache_files/ndzl4ssm.txt") ) );
+        resultView.setText(sb.toString());
+    }
     String ssmQueryData(){
         //TO GET DATA SHARED BY OTHER APP
         return "hi!\nI can see "+ssm_notpersisted_countRecords()+" not-persisted recs in your SSM\nAnd " + ssm_ispersisted_countRecords()+" persisted recs";
@@ -383,7 +435,68 @@ public class MainActivity extends AppCompatActivity {
         return res;
     }
 
-   void insertFile() {
+
+    String fpQueryFile(Uri _uri_to_be_queried) {
+        String TAG="QUERY_REMOTE_FILEPROVIDER";
+        Uri uriFile = _uri_to_be_queried;
+        //String selection = "target_app_package='com.ndzl.targetelevator'"; //GETS *ALL FILES* FOR THE PACKAGE NO PERSISTANCE FILTER
+
+
+        String res = "N/A";
+        Cursor cursor = null;
+        try {
+            //cursor = getContentResolver().query(uriFile, null, null, null, null); //ssm style not working for my file provider
+
+            //java.lang.SecurityException: Permission Denial: opening provider com.ndzl.targetelevator.MyFileProvider from ProcessRecord{83d9053 31874:com.ndzl.sst_companionapp/u0a224} (pid=31874, uid=10224) that is not exported from UID 10223
+            ParcelFileDescriptor inputPFD = getContentResolver().openFileDescriptor(uriFile, "r");
+            FileDescriptor fd = inputPFD.getFileDescriptor();
+
+        } catch (Exception e) {
+            Log.d(TAG, "Error: " + e.getMessage());
+        }
+        try {
+            if (cursor != null && cursor.moveToFirst()) {
+                StringBuilder strBuild = new StringBuilder();
+                String uriString;
+                strBuild.append("FILES FOUND: "+cursor.getCount()+"\n");
+                while (!cursor.isAfterLast()) {
+                    /*
+                    //for debug purpose: listing cursor's columns
+                    for (int i = 0; i<cursor.getColumnCount(); i++) {
+                        Log.d(TAG, "column " + i + "=" + cursor.getColumnName(i));
+                    }
+
+                    //column 0=_display_name   column 1=_size
+
+                    //RESULT: THE COLUMN NAMES USED BELOW
+                    */
+                    String fileName = cursor.getString(cursor.getColumnIndex("_display_name"));
+                    String fileSize = cursor.getString(cursor.getColumnIndex("_size"));
+
+                    strBuild.append(fileName+" ");
+                    strBuild.append(fileSize+"\n");
+                    //strBuild.append("\n ----------------------").append("\n");
+
+                    cursor.moveToNext();
+                }
+                //Log.d(TAG, "Query File: " + strBuild);
+                //Log.d("Client - Query", "Set test to view =  " + System.currentTimeMillis());
+                res =strBuild.toString();
+            } else {
+                res="No files to query for local package "+getPackageName();
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "Files query data error: " + e.getMessage());
+            res="EXCP-"+e.getMessage();
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+        return res;
+    }
+
+    void insertFile() {
         //String sourcePath = "/sdcard/Download/A.txt";  //GOOD FOR SD660 CHIPSET
         //String sourcePath = "/sdcard/Android/data/A.txt";  //GOOD FOR 6490 CHIPSET TC58  THIS PATH IS MEANINGLESS
 
