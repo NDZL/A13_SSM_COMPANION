@@ -162,7 +162,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
-
+        //SETTING UP A CONTENT OBSERVER TO GET INSERT NOTIFICATIONS FROM SSM DATA SHARING
+        //ORIGINATING APP INSERTS DATA AND CALLS getContentResolver().notifyChange(cpUri, null);
         Uri packageURI = Uri.parse(AUTHORITY + "/[" + getPackageName() + "]"); //more specific Uri + FALSE IN registerContentObserver
         //Uri packageURI = Uri.parse(AUTHORITY ); //generic Uri getting 3rd party apps notifications + TRUE in the flag of registerContentObserver
         Log.d(TAG, "registerContentObserver / URI="+packageURI);
@@ -441,13 +442,9 @@ public class MainActivity extends AppCompatActivity {
         Uri uriFile = _uri_to_be_queried;
         //String selection = "target_app_package='com.ndzl.targetelevator'"; //GETS *ALL FILES* FOR THE PACKAGE NO PERSISTANCE FILTER
 
-
         String res = "N/A";
         Cursor cursor = null;
         try {
-            //cursor = getContentResolver().query(uriFile, null, null, null, null); //ssm style not working for my file provider
-
-            //java.lang.SecurityException: Permission Denial: opening provider com.ndzl.targetelevator.MyFileProvider from ProcessRecord{83d9053 31874:com.ndzl.sst_companionapp/u0a224} (pid=31874, uid=10224) that is not exported from UID 10223
             ParcelFileDescriptor inputPFD = getContentResolver().openFileDescriptor(uriFile, "r");
             FileDescriptor fd = inputPFD.getFileDescriptor();
 
@@ -461,11 +458,10 @@ public class MainActivity extends AppCompatActivity {
                 strBuild.append("FILES FOUND: "+cursor.getCount()+"\n");
                 while (!cursor.isAfterLast()) {
                     /*
-                    //for debug purpose: listing cursor's columns
+                    //for debug purpose only: listing cursor's columns
                     for (int i = 0; i<cursor.getColumnCount(); i++) {
                         Log.d(TAG, "column " + i + "=" + cursor.getColumnName(i));
                     }
-
                     //column 0=_display_name   column 1=_size
 
                     //RESULT: THE COLUMN NAMES USED BELOW
@@ -475,12 +471,10 @@ public class MainActivity extends AppCompatActivity {
 
                     strBuild.append(fileName+" ");
                     strBuild.append(fileSize+"\n");
-                    //strBuild.append("\n ----------------------").append("\n");
 
                     cursor.moveToNext();
                 }
                 //Log.d(TAG, "Query File: " + strBuild);
-                //Log.d("Client - Query", "Set test to view =  " + System.currentTimeMillis());
                 res =strBuild.toString();
             } else {
                 res="No files to query for local package "+getPackageName();
